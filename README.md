@@ -1,2 +1,2 @@
-# wittgenstein_translator
+# uber_translator
 Implementing GNMT in Tensorflow
