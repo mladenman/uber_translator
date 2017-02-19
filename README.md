@@ -1,2 +1,2 @@
 # uber_translator
-Implementing GNMT in Tensorflow
+Learning Tensorflow trough implementing GNMT with latest contrib/seq2seq API
