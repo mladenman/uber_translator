@@ -38,13 +38,14 @@ This example will create 6 files in `output/`: train.fr, train.en, test.fr,\
 _GO = '<S>'
 _EOS = '</S>'
 _UNK = '<UNK>'
+_PAD = '<PAD>'
 
-_START_VOCAB = [_GO, _EOS, _UNK]
+_START_VOCAB = [_GO, _EOS, _UNK, _PAD]
 
-# PAD_ID = 0
-GO_ID = 0
-EOS_ID = 1
-UNK_ID = 2
+PAD_ID = 0
+GO_ID = 1
+EOS_ID = 2
+UNK_ID = 3
 
 temporary_files = []
 
@@ -217,14 +218,14 @@ def split_corpus(filenames, sizes):
 
 
 def create_subwords(filename, output_filename, size):
-    cmd = ['scripts/learn_bpe.py', '--input', filename, '-s', str(size), '--output', output_filename]
+    cmd = ['/Users/mladenman/uber_translator/preprocessing/learn_bpe.py', '--input', filename, '-s', str(size), '--output', output_filename]
     subprocess.call(cmd)
 
 
 def apply_subwords(filename, bpe_filename):
     with open_temp_files(num=1) as output_:
         output_, = output_
-        cmd = ['scripts/apply_bpe.py', '--input', filename, '--codes', bpe_filename]
+        cmd = ['~/uber_translator/preprocessing/apply_bpe.py', '--input', filename, '--codes', bpe_filename]
         subprocess.call(cmd, stdout=output_)
 
         return output_.name
