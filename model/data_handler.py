@@ -2,13 +2,14 @@ import os
 import numpy as np
 import pickle
 from random import sample
+import tensorflow as tf
 
 
 def decode(sequence, lookup, separator=''):  # 0 used for padding, is ignored
     return separator.join([lookup[element] for element in sequence if element])
 
 
-def batch_gen(x, y, batch_size):
+def batch_gen(x, y, batch_size):  # ne treba mi u novoj
     # infinite while
     while True:
         for i in range(0, len(x), batch_size):
@@ -16,23 +17,24 @@ def batch_gen(x, y, batch_size):
                 yield x[i: (i + 1) * batch_size].T, y[i: (i+1) * batch_size].T
 
 
-def rand_batch_gen(x, y, batch_size):
+def rand_batch_gen(x, y, batch_size):  # ne treba mi u novoj
     while True:
         sample_idx = sample(list(np.arange(len(x))), batch_size)
         yield x[sample_idx].T, y[sample_idx].T
 
 
 def prepare_data_unidirectional(
+        #  kreira numpy i metadata dumpove podataka, uzima vocab i OCISCENE set podatke
+        #
         sets_path,
         tf_data_path,
-        folder,
-        sets,
+        subset,
         ext_enc,
         ext_dec,
         max_sentence_length,
         min_sentence_length):
 
-    path = os.path.join(sets_path, "{}".format(folder))
+    path = os.path.join(sets_path)
 
     vocab_file_questions = os.path.join(path, "vocab.{}".format(ext_enc))
     vocab_file_answers = os.path.join(path, "vocab.{}".format(ext_dec))
@@ -40,21 +42,18 @@ def prepare_data_unidirectional(
     w2idx_questions, idx2w_questions = initialize_vocabulary(vocab_file_questions)
     w2idx_answers, idx2w_answers = initialize_vocabulary(vocab_file_answers)
 
-    for subset in sets:
+    words_questions, words_answers = read_words(path, subset, ext_enc, ext_dec)
 
-        words_questions, words_answers = read_words(path, subset, ext_enc, ext_dec)
+    idx_questions, idx_answers = word2idx(
+                                    words_questions,
+                                    words_answers,
+                                    w2idx_questions,
+                                    w2idx_answers,
+                                    max_sentence_length,
+                                    min_sentence_length)
 
-        idx_questions, idx_answers = word2idx(
-                                        words_questions,
-                                        words_answers,
-                                        w2idx_questions,
-                                        w2idx_answers,
-                                        max_sentence_length,
-                                        min_sentence_length)
-
-        # save final files
-        np.save(os.path.join(tf_data_path, 'idx_q.{}.npy'.format(subset)), idx_questions)
-        np.save(os.path.join(tf_data_path, 'idx_a.{}.npy'.format(subset)), idx_answers)
+    np.save(os.path.join(tf_data_path, 'idx_q.{}.npy'.format(subset)), idx_questions)
+    np.save(os.path.join(tf_data_path, 'idx_a.{}.npy'.format(subset)), idx_answers)
 
     metadata = {
         'enc_input_length': max_sentence_length,
@@ -65,8 +64,9 @@ def prepare_data_unidirectional(
         'idx2w_dec': idx2w_answers
     }
 
-    with open(os.path.join(tf_data_path, 'metadata.pkl'), 'wb') as f:
-        pickle.dump(metadata, f, 2)
+    if not os.path.exists(os.path.join(tf_data_path, 'metadata.pkl')):
+        with open(os.path.join(tf_data_path, 'metadata.pkl'), 'wb') as f:
+            pickle.dump(metadata, f, 2)
 
 
 # FUNCTIONS FOR BIDIRECTIONAL TRANSLATOR - SHOULD BE DONE AS CASE OF MULTIDIRECTIONAL
@@ -144,7 +144,7 @@ def pad_seq(seq, lookup, max_sentence_length):
         else:
             indices.append(lookup['<UNK>'])
 
-    return indices + [lookup['<PAD>']] * (max_sentence_length - len(seq))
+    return indices # + [lookup['<PAD>']] * (max_sentence_length - len(seq)) ako hou da vratim pad nekad
 
 
 def initialize_vocabulary(vocabulary_path):
@@ -179,3 +179,41 @@ def load_tf_data(path):
     idx_a_test = np.load(os.path.join(path, 'idx_a.test.npy'))
 
     return metadata, idx_q_train, idx_a_train, idx_q_dev, idx_a_dev, idx_q_test, idx_a_test
+
+
+def sequence_to_tf_example(sequence_en, sequence_de):
+    ex = tf.train.SequenceExample()
+
+    fl_tokens_en = ex.feature_lists.feature_list["tokens_en"]
+    fl_tokens_en.feature.add().int64_list.value.append(2)   # vocab['<s>']
+    for token in sequence_en:
+        fl_tokens_en.feature.add().int64_list.value.append(token)
+    fl_tokens_en.feature.add().int64_list.value.append(3)   # vocab['<\s>']
+
+    fl_tokens_de = ex.feature_lists.feature_list["tokens_de"]
+    fl_tokens_de.feature.add().int64_list.value.append(2)   # vocab['<s>']
+    for token in sequence_de:
+        fl_tokens_de.feature.add().int64_list.value.append(token)
+    fl_tokens_de.feature.add().int64_list.value.append(3)   # vocab['<\s>']
+
+    return ex
+
+
+def parse(ex):
+    '''
+    Explain to TF how to go from a serialized example back to tensors
+    :param ex:
+    :return:
+    '''
+    sequence_features = {
+        "tokens_en": tf.FixedLenSequenceFeature([], dtype=tf.int64),
+        "tokens_de": tf.FixedLenSequenceFeature([], dtype=tf.int64)
+    }
+
+    # Parse the example (returns a dictionary of tensors)
+    sequence_parsed = tf.parse_single_sequence_example(
+        serialized=ex,
+        sequence_features=sequence_features
+    )
+
+    return {"seq_en": sequence_parsed["tokens_en"], "seq_de": sequence_parsed["tokens_de"]}
