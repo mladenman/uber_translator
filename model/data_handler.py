@@ -28,6 +28,7 @@ def prepare_data_unidirectional(
         #
         sets_path,
         tf_data_path,
+        dataset_name,
         subset,
         ext_enc,
         ext_dec,
@@ -36,13 +37,13 @@ def prepare_data_unidirectional(
 
     path = os.path.join(sets_path)
 
-    vocab_file_questions = os.path.join(path, "vocab.{}".format(ext_enc))
-    vocab_file_answers = os.path.join(path, "vocab.{}".format(ext_dec))
+    vocab_file_questions = os.path.join(path, "wmt2014.vocab.50K.{}".format(ext_enc))
+    vocab_file_answers = os.path.join(path, "wmt2014.vocab.50K.{}".format(ext_dec))
 
     w2idx_questions, idx2w_questions = initialize_vocabulary(vocab_file_questions)
     w2idx_answers, idx2w_answers = initialize_vocabulary(vocab_file_answers)
 
-    words_questions, words_answers = read_words(path, subset, ext_enc, ext_dec)
+    words_questions, words_answers = read_words(path, dataset_name, subset, ext_enc, ext_dec)
 
     idx_questions, idx_answers = word2idx(
                                     words_questions,
@@ -93,10 +94,10 @@ def prepare_data_unidirectional(
 #    pass
 
 
-def read_words(path, subset, ext1, ext2):
+def read_words(path, dataset_name, subset, ext1, ext2):
 
-    file_questions = os.path.join(path, "{}.{}".format(subset, ext1))
-    file_answers = os.path.join(path, "{}.{}".format(subset, ext2))
+    file_questions = os.path.join(path, "{}.{}.{}".format(dataset_name, subset, ext1))
+    file_answers = os.path.join(path, "{}.{}.{}".format(dataset_name, subset, ext2))
 
     lines_questions = open(file_questions, encoding='utf-8', errors='ignore').read().split('\n')
     lines_answers = open(file_answers, encoding='utf-8', errors='ignore').read().split('\n')
@@ -125,7 +126,7 @@ def pad(words, w2idx, max_sentence_length, min_sentence_length):
 
         q_indices = pad_seq(words[i], w2idx, max_sentence_length)
         if max_sentence_length >= len(q_indices) >= min_sentence_length:
-            idx_q[real_set_size] = np.array(q_indices)
+            idx_q[real_set_size] = np.array(q_indices + [0] * (max_sentence_length - len(q_indices))) # morao da vratim pad zbog numpyja
             real_set_size += 1
 
     print(idx_q[:real_set_size].shape)
@@ -142,7 +143,7 @@ def pad_seq(seq, lookup, max_sentence_length):
         if word in lookup:
             indices.append(lookup[word])
         else:
-            indices.append(lookup['<UNK>'])
+            indices.append(lookup['<unk>'])
 
     return indices # + [lookup['<PAD>']] * (max_sentence_length - len(seq)) ako hou da vratim pad nekad
 
